@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - LOG_LEVEL=debug
+    depends_on:
+      - localstack
+    networks:
+      - profitify-app
+
+  localstack:
+    image: localstack/localstack
+    environment:
+      - SERVICES=dynamodb
+      - DEBUG=1
+      - PERSISTENCE=1
+      - DATA_DIR=/var/lib/localstack/data
+    ports:
+      - "4566:4566"
+    volumes:
+      - "./docker/:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - profitify-app
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - profitify-app
+
+networks:
+  profitify-app:
+    driver: bridge
+
