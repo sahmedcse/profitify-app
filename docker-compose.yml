@@ -12,6 +12,22 @@ services:
     networks:
       - profitify-app
 
+  dynamodb-init:
+    build:
+      context: .
+      dockerfile: backend/local/Dockerfile
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - profitify-app
+    profiles:
+      - tools
   localstack:
     image: localstack/localstack
     environment:

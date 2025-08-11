@@ -1,0 +1,19 @@
+# Ignore local development tools
+local/
+
+# Ignore test files
+*_test.go
+
+# Ignore documentation
+*.md
+
+# Ignore scripts
+*.sh
+
+# Ignore IDE files
+.vscode/
+.idea/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
