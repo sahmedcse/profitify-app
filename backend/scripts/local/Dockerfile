@@ -14,7 +14,7 @@ COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
 # Copy only the local development tools
-COPY backend/local/ ./local/
+COPY backend/scripts/local/ ./local/
 
 # Build the DynamoDB initialization tool
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o dynamodb-init ./local/dynamodb-init.go

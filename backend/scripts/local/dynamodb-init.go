@@ -28,15 +28,22 @@ type DailyAggStockItem struct {
 	VWAP             float32 `json:"vwap,omitempty" dynamodbav:"vwap,omitempty"`
 }
 
-const (
-	tableName = "stocks-data"
-	// 5 years of daily data (excluding weekends and holidays)
-	totalDays = 5 * 365 * 5 / 7 // Approximately 1300 trading days
-	// Batch size for DynamoDB operations (max 25 items per batch)
-	batchSize = 25
-	// Number of worker goroutines
-	numWorkers = 10
-)
+type Ticker struct {
+    Ticker string `json:"ticker" dynamodbav:"ticker"`
+    Name string `json:"name" dynamodbav:"name"`
+	Market string `json:"market" dynamodbav:"market"`
+	Locale string `json:"locale" dynamodbav:"locale"`
+	PrimaryExchange string `json:"primaryExchange,omitempty" dynamodbav:"primaryExchange,omitempty"`
+	ShareClassFIGI string `json:"shareClassFIGI,omitempty" dynamodbav:"shareClassFIGI,omitempty"`
+	Type string `json:"type,omitempty" dynamodbav:"type,omitempty"`
+	Active int32 `json:"active,omitempty" dynamodbav:"active,omitempty"`
+	Cik string `json:"cik,omitempty" dynamodbav:"cik,omitempty"`
+	CompositeFigi string `json:"compositeFigi,omitempty" dynamodbav:"compositeFigi,omitempty"`
+	CurrencyName string `json:"currencyName,omitempty" dynamodbav:"currencyName,omitempty"`
+	DelistedUTC int64 `json:"delistedUTC,omitempty" dynamodbav:"delistedUTC,omitempty"`
+	LastUpdatedUTC int64 `json:"lastUpdatedUTC,omitempty" dynamodbav:"lastUpdatedUTC,omitempty"`
+}
+
 
 var tickers = []string{
 	"AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META",
@@ -50,24 +57,28 @@ func main() {
 		log.Fatalf("Unable to load SDK config: %v", err)
 	}
 
-	// Create DynamoDB client
 	client := dynamodb.NewFromConfig(cfg)
 
-	// Check if table exists, if not create it
-	if err := ensureTableExists(client); err != nil {
+	if err := ensureTableExists(client, "stocks-data"); err != nil {
 		log.Fatalf("Failed to ensure table exists: %v", err)
 	}
 
-	// Generate and insert sample data
-	if err := populateTable(client); err != nil {
+	if err = ensureTableExists(client, "tickers"); err != nil {
+		log.Fatalf("Failed to ensure table exists: %v", err)
+	}
+
+	if err := populateStocksDataTable(client); err != nil {
+		log.Fatalf("Failed to populate table: %v", err)
+	}
+
+	if err := populateTickerTable(client); err != nil {
 		log.Fatalf("Failed to populate table: %v", err)
 	}
 
 	log.Println("Successfully populated stocks-data table with sample data!")
 }
 
-func ensureTableExists(client *dynamodb.Client) error {
-	// Check if table exists
+func ensureTableExists(client *dynamodb.Client, tableName string) error {
 	_, err := client.DescribeTable(context.TODO(), &dynamodb.DescribeTableInput{
 		TableName: aws.String(tableName),
 	})
@@ -79,29 +90,14 @@ func ensureTableExists(client *dynamodb.Client) error {
 
 	log.Printf("Creating table %s...", tableName)
 
-	// Create table
+	tableAttributeDefinitions := getTableAttributeDefinitions(tableName)
+	tableKeySchema := getTableKeySchema(tableName)
+
+
 	_, err = client.CreateTable(context.TODO(), &dynamodb.CreateTableInput{
 		TableName: aws.String(tableName),
-		AttributeDefinitions: []types.AttributeDefinition{
-			{
-				AttributeName: aws.String("ticker"),
-				AttributeType: types.ScalarAttributeTypeS,
-			},
-			{
-				AttributeName: aws.String("timestamp"),
-				AttributeType: types.ScalarAttributeTypeN,
-			},
-		},
-		KeySchema: []types.KeySchemaElement{
-			{
-				AttributeName: aws.String("ticker"),
-				KeyType:       types.KeyTypeHash,
-			},
-			{
-				AttributeName: aws.String("timestamp"),
-				KeyType:       types.KeyTypeRange,
-			},
-		},
+		AttributeDefinitions: tableAttributeDefinitions,
+		KeySchema: tableKeySchema,
 		BillingMode: types.BillingModePayPerRequest,
 	})
 
@@ -109,8 +105,6 @@ func ensureTableExists(client *dynamodb.Client) error {
 		return fmt.Errorf("failed to create table: %v", err)
 	}
 
-	// Wait for table to be active
-	log.Println("Waiting for table to be active...")
 	waiter := dynamodb.NewTableExistsWaiter(client)
 	err = waiter.Wait(context.TODO(), &dynamodb.DescribeTableInput{
 		TableName: aws.String(tableName),
@@ -124,9 +118,77 @@ func ensureTableExists(client *dynamodb.Client) error {
 	return nil
 }
 
-func populateTable(client *dynamodb.Client) error {
+func getTableAttributeDefinitions(tableName string) []types.AttributeDefinition {
+	switch tableName {
+		case "tickers":
+			return []types.AttributeDefinition{
+				{AttributeName: aws.String("ticker"), AttributeType: types.ScalarAttributeTypeS},
+			}
+		case "stocks-data":
+			return []types.AttributeDefinition{
+				{AttributeName: aws.String("ticker"), AttributeType: types.ScalarAttributeTypeS},
+				{AttributeName: aws.String("timestamp"), AttributeType: types.ScalarAttributeTypeN},
+			}
+		default:
+			return []types.AttributeDefinition{}
+	}
+}
+
+func getTableKeySchema(tableName string) []types.KeySchemaElement {
+	switch tableName {
+		case "tickers":
+			return []types.KeySchemaElement{
+				{AttributeName: aws.String("ticker"), KeyType: types.KeyTypeHash},
+			}
+		case "stocks-data":
+			return []types.KeySchemaElement{
+				{AttributeName: aws.String("ticker"), KeyType: types.KeyTypeHash},
+				{AttributeName: aws.String("timestamp"), KeyType: types.KeyTypeRange},
+			}
+		default:
+			return []types.KeySchemaElement{}
+	}
+}
+
+func populateTickerTable(client *dynamodb.Client) error {
+	for _, ticker := range tickers {
+		item := Ticker{
+			Ticker: ticker,
+			Name: ticker,
+			Market: "NASDAQ",
+			Locale: "US",
+			PrimaryExchange: "NASDAQ",
+			ShareClassFIGI: "BBG000B9XRY4",
+			Type: "CS",
+			Active: 1,
+			Cik: "0001326800",
+			CompositeFigi: "BBG000B9XRY4",
+			CurrencyName: "USD",
+			DelistedUTC: 0,
+			LastUpdatedUTC: time.Now().Unix(),
+		}
+		av, err := attributevalue.MarshalMap(item)
+		if err != nil {
+			return fmt.Errorf("failed to marshal item: %v", err)
+		}
+		_, err = client.PutItem(context.TODO(), &dynamodb.PutItemInput{
+			TableName: aws.String("tickers"),
+			Item: av,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to put item: %v", err)
+		}
+	}
+	return nil
+}
+
+
+func populateStocksDataTable(client *dynamodb.Client) error {
 	// Set random seed for reproducible data
 	r := rand.New(rand.NewSource(42))
+	batchSize := 25
+	numWorkers := 10
+	totalDays := 5 * 365 * 5 / 7 // Approximately 1300 trading days
 
 	// Start date: 5 years ago
 	startDate := time.Now().AddDate(-5, 0, 0)
@@ -147,7 +209,7 @@ func populateTable(client *dynamodb.Client) error {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			worker(client, itemChan, workerID, &mu, &totalItems)
+			worker(client, itemChan, workerID, &mu, &totalItems, batchSize)
 		}(i)
 	}
 
@@ -170,7 +232,7 @@ func populateTable(client *dynamodb.Client) error {
 			}
 
 			// Generate realistic stock data
-			item := generateDailyData(ticker, date, currentPrice, r)
+			item := generateDailyAggData(ticker, date, currentPrice, r)
 
 			// Send item to workers via channel
 			itemChan <- item
@@ -203,7 +265,7 @@ func populateTable(client *dynamodb.Client) error {
 	return nil
 }
 
-func worker(client *dynamodb.Client, itemChan <-chan DailyAggStockItem, workerID int, mu *sync.Mutex, totalItems *int) {
+func worker(client *dynamodb.Client, itemChan <-chan DailyAggStockItem, workerID int, mu *sync.Mutex, totalItems *int, batchSize int) {
 	var batch []DailyAggStockItem
 	batchCount := 0
 	workerItems := 0
@@ -214,7 +276,7 @@ func worker(client *dynamodb.Client, itemChan <-chan DailyAggStockItem, workerID
 
 		// When batch is full, process it
 		if len(batch) >= batchSize {
-			if err := processBatch(client, batch, workerID, batchCount); err != nil {
+			if err := processBatch(client, batch, workerID, batchCount, "stocks-data"); err != nil {
 				log.Printf("Worker %d: Error processing batch %d: %v", workerID, batchCount, err)
 			} else {
 				// Update total items count
@@ -229,7 +291,7 @@ func worker(client *dynamodb.Client, itemChan <-chan DailyAggStockItem, workerID
 
 	// Process remaining items in the last batch
 	if len(batch) > 0 {
-		if err := processBatch(client, batch, workerID, batchCount); err != nil {
+		if err := processBatch(client, batch, workerID, batchCount, "stocks-data"); err != nil {
 			log.Printf("Worker %d: Error processing final batch %d: %v", workerID, batchCount, err)
 		} else {
 			// Update total items count
@@ -242,7 +304,7 @@ func worker(client *dynamodb.Client, itemChan <-chan DailyAggStockItem, workerID
 	log.Printf("Worker %d: Completed processing %d items in %d batches", workerID, workerItems, batchCount+1)
 }
 
-func processBatch(client *dynamodb.Client, batch []DailyAggStockItem, workerID, batchCount int) error {
+func processBatch(client *dynamodb.Client, batch []DailyAggStockItem, workerID, batchCount int, tableName string) error {
 	// Convert items to DynamoDB attribute values
 	writeRequests := make([]types.WriteRequest, len(batch))
 
@@ -308,7 +370,7 @@ func getBasePrice(ticker string) float32 {
 	return 100.0
 }
 
-func generateDailyData(ticker string, date time.Time, previousClose float32, r *rand.Rand) DailyAggStockItem {
+func generateDailyAggData(ticker string, date time.Time, previousClose float32, r *rand.Rand) DailyAggStockItem {
 	// Generate realistic price movements
 	// Daily change: -5% to +5%
 	dailyChange := (r.Float32()-0.5) * 0.1
