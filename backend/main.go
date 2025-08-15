@@ -2,50 +2,54 @@ package main
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"os"
-	"os/signal"
-	"profitify-backend/internal/middleware"
+	"profitify-backend/internal/handlers"
+	"profitify-backend/pkg/config"
 	"profitify-backend/pkg/logger"
-	"syscall"
-	"time"
-
-	"github.com/gin-gonic/gin"
+	"profitify-backend/pkg/router"
+	"profitify-backend/pkg/server"
 )
 
 func main() {
-    logger.Init()
-    log := logger.Get()
-    ctx := context.Background()
-
-    ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-    defer cancel()
-
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-    go func() {
-        <-sigChan
-        log.Info("Shutting down server...")
-        cancel()
-    }()
-
-
-	router := gin.New()
-    router.Use(gin.Recovery())
-    router.Use(middleware.Log())
-
-    router.GET("/health", func(c *gin.Context) {
-        c.JSON(http.StatusOK, gin.H{"message": "OK"})
-    })
-
-    server := &http.Server{
-        Addr: ":8080",
-        Handler: router,
-    }
-
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Fatal(err)
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "startup failed: %v\n", err)
+		os.Exit(1)
 	}
+}
+
+func run() error {
+	// Create root context for the application
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Load configuration first
+	cfg := config.Load()
+
+	// Initialize logger with configuration
+	if err := logger.Init(&logger.Config{
+		Level:       os.Getenv("LOG_LEVEL"),
+		Environment: cfg.Environment,
+		OutputPaths: []string{"stdout"},
+	}); err != nil {
+		return fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	log := logger.Get()
+	defer logger.Sync()
+
+	// Initialize router
+	r := router.New(cfg.Environment)
+
+	// Initialize handlers with application context
+	handler, err := handlers.NewHandler(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize handlers: %w", err)
+	}
+
+	// Setup routes
+	r.SetupRoutes(handler)
+
+	// Create and start server with context
+	srv := server.New(r.Engine(), cfg, log)
+	return srv.Start(ctx)
 }

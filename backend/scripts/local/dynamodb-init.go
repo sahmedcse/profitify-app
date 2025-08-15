@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"profitify-backend/internal/models"
 	"sync"
 	"time"
 
@@ -27,23 +28,6 @@ type DailyAggStockItem struct {
 	OTC              bool    `json:"otc,omitempty" dynamodbav:"otc,omitempty"`
 	VWAP             float32 `json:"vwap,omitempty" dynamodbav:"vwap,omitempty"`
 }
-
-type Ticker struct {
-    Ticker string `json:"ticker" dynamodbav:"ticker"`
-    Name string `json:"name" dynamodbav:"name"`
-	Market string `json:"market" dynamodbav:"market"`
-	Locale string `json:"locale" dynamodbav:"locale"`
-	PrimaryExchange string `json:"primaryExchange,omitempty" dynamodbav:"primaryExchange,omitempty"`
-	ShareClassFIGI string `json:"shareClassFIGI,omitempty" dynamodbav:"shareClassFIGI,omitempty"`
-	Type string `json:"type,omitempty" dynamodbav:"type,omitempty"`
-	Active int32 `json:"active,omitempty" dynamodbav:"active,omitempty"`
-	Cik string `json:"cik,omitempty" dynamodbav:"cik,omitempty"`
-	CompositeFigi string `json:"compositeFigi,omitempty" dynamodbav:"compositeFigi,omitempty"`
-	CurrencyName string `json:"currencyName,omitempty" dynamodbav:"currencyName,omitempty"`
-	DelistedUTC int64 `json:"delistedUTC,omitempty" dynamodbav:"delistedUTC,omitempty"`
-	LastUpdatedUTC int64 `json:"lastUpdatedUTC,omitempty" dynamodbav:"lastUpdatedUTC,omitempty"`
-}
-
 
 var tickers = []string{
 	"AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META",
@@ -123,6 +107,7 @@ func getTableAttributeDefinitions(tableName string) []types.AttributeDefinition 
 		case "tickers":
 			return []types.AttributeDefinition{
 				{AttributeName: aws.String("ticker"), AttributeType: types.ScalarAttributeTypeS},
+				{AttributeName: aws.String("lastUpdatedUTC"), AttributeType: types.ScalarAttributeTypeN},
 			}
 		case "stocks-data":
 			return []types.AttributeDefinition{
@@ -139,6 +124,7 @@ func getTableKeySchema(tableName string) []types.KeySchemaElement {
 		case "tickers":
 			return []types.KeySchemaElement{
 				{AttributeName: aws.String("ticker"), KeyType: types.KeyTypeHash},
+				{AttributeName: aws.String("lastUpdatedUTC"), KeyType: types.KeyTypeRange},
 			}
 		case "stocks-data":
 			return []types.KeySchemaElement{
@@ -152,18 +138,18 @@ func getTableKeySchema(tableName string) []types.KeySchemaElement {
 
 func populateTickerTable(client *dynamodb.Client) error {
 	for _, ticker := range tickers {
-		item := Ticker{
+		item := models.Ticker{
 			Ticker: ticker,
 			Name: ticker,
 			Market: "NASDAQ",
 			Locale: "US",
 			PrimaryExchange: "NASDAQ",
-			ShareClassFIGI: "BBG000B9XRY4",
+			ShareClassFigi: "BBG000B9XRY4",
 			Type: "CS",
 			Active: 1,
 			Cik: "0001326800",
 			CompositeFigi: "BBG000B9XRY4",
-			CurrencyName: "USD",
+			Currency: "USD",
 			DelistedUTC: 0,
 			LastUpdatedUTC: time.Now().Unix(),
 		}
@@ -205,7 +191,7 @@ func populateStocksDataTable(client *dynamodb.Client) error {
 	var wg sync.WaitGroup
 
 	// Start worker goroutines
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
