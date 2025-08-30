@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	ErrTickerNotFound    = errors.New("ticker not found")
-	ErrInvalidTicker     = errors.New("invalid ticker symbol")
+	ErrTickerNotFound = errors.New("ticker not found")
+	ErrInvalidTicker  = errors.New("invalid ticker symbol")
 )
 
 type TickerService interface {

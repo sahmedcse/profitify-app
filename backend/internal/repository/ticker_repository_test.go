@@ -8,7 +8,6 @@ import (
 	"profitify-backend/internal/repository"
 )
 
-
 func TestMockTickerRepository_GetTicker(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -245,9 +244,9 @@ func TestMockTickerRepository_CallTracking(t *testing.T) {
 	ctx := context.Background()
 
 	// Make several calls
-	mockRepo.GetTicker(ctx, "AAPL")
-	mockRepo.GetTicker(ctx, "GOOGL")
-	mockRepo.GetActiveTickers(ctx)
+	_, _ = mockRepo.GetTicker(ctx, "AAPL")
+	_, _ = mockRepo.GetTicker(ctx, "GOOGL")
+	_, _ = mockRepo.GetActiveTickers(ctx)
 
 	// Verify call counts
 	if len(mockRepo.Calls.GetTicker) != 2 {

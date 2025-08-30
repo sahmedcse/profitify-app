@@ -12,13 +12,16 @@ type MockTickerRepository struct {
 	tickers map[string]*models.Ticker
 
 	// Function fields for custom behavior in tests
-	GetTickerFunc          func(ctx context.Context, symbol string) (*models.Ticker, error)
-	GetActiveTickersFunc   func(ctx context.Context) ([]models.Ticker, error)
+	GetTickerFunc        func(ctx context.Context, symbol string) (*models.Ticker, error)
+	GetActiveTickersFunc func(ctx context.Context) ([]models.Ticker, error)
 
 	// Call tracking
 	Calls struct {
-		GetTicker          []struct{ Ctx context.Context; Symbol string }
-		GetActiveTickers   []context.Context
+		GetTicker []struct {
+			Ctx    context.Context
+			Symbol string
+		}
+		GetActiveTickers []context.Context
 	}
 }
 
@@ -32,7 +35,10 @@ func NewMockTickerRepository() *MockTickerRepository {
 // GetTicker mock implementation
 func (m *MockTickerRepository) GetTicker(ctx context.Context, symbol string) (*models.Ticker, error) {
 	m.mu.Lock()
-	m.Calls.GetTicker = append(m.Calls.GetTicker, struct{ Ctx context.Context; Symbol string }{ctx, symbol})
+	m.Calls.GetTicker = append(m.Calls.GetTicker, struct {
+		Ctx    context.Context
+		Symbol string
+	}{ctx, symbol})
 	m.mu.Unlock()
 
 	if m.GetTickerFunc != nil {
