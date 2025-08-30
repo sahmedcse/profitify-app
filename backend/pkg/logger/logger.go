@@ -71,7 +71,7 @@ func WithFields(fields map[string]interface{}) *zap.SugaredLogger {
 // buildLogger creates a new logger based on configuration
 func buildLogger(cfg *Config) (*zap.SugaredLogger, error) {
 	var zapCfg zap.Config
-	
+
 	if cfg.Environment == "production" {
 		zapCfg = zap.NewProductionConfig()
 		zapCfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
@@ -79,22 +79,22 @@ func buildLogger(cfg *Config) (*zap.SugaredLogger, error) {
 		zapCfg = zap.NewDevelopmentConfig()
 		zapCfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	}
-	
+
 	// Set log level
 	level, err := zapcore.ParseLevel(cfg.Level)
 	if err != nil {
 		level = zapcore.InfoLevel
 	}
 	zapCfg.Level = zap.NewAtomicLevelAt(level)
-	
+
 	// Set output paths
 	if len(cfg.OutputPaths) > 0 {
 		zapCfg.OutputPaths = cfg.OutputPaths
 	}
-	
+
 	// Add caller information
 	zapCfg.Development = cfg.Environment != "production"
-	
+
 	// Build the logger
 	logger, err := zapCfg.Build(
 		zap.AddCallerSkip(1), // Skip one level to show actual caller
@@ -103,7 +103,7 @@ func buildLogger(cfg *Config) (*zap.SugaredLogger, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build logger: %w", err)
 	}
-	
+
 	return logger.Sugar(), nil
 }
 

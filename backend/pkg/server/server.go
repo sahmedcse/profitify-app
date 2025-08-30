@@ -67,9 +67,12 @@ func (s *Server) gracefulShutdown(ctx context.Context) error {
 	defer cancel()
 
 	s.log.Infow("attempting graceful shutdown", "timeout", s.config.ShutdownTimeout)
-	
+
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.httpServer.Close()
+		// Force close if graceful shutdown fails
+		if closeErr := s.httpServer.Close(); closeErr != nil {
+			s.log.Errorw("failed to force close server", "error", closeErr)
+		}
 		return err
 	}
 

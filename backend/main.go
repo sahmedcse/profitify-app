@@ -35,7 +35,9 @@ func run() error {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	log := logger.Get()
-	defer logger.Sync()
+	defer func() {
+		_ = logger.Sync()
+	}()
 
 	// Initialize router
 	r := router.New(cfg.Environment)
